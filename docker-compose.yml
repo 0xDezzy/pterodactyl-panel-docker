@@ -1,10 +1,12 @@
-version: '2'
+version: '3.8'
 services:
+
   database:
     image: mariadb
     restart: always
     volumes:
-      - "./srv/database:/var/lib/mysql"
+      - "${DATADIR}/pterodactyl/database:/var/lib/mysql"
+      - pterodactyl
     environment:
       ## Database settings
       ## change if you want it to be more secure.
@@ -16,6 +18,8 @@ services:
   cache:
     restart: always
     image: redis:alpine
+    networks:
+      - pterodactyl
 
   panel:
     build: .
@@ -24,15 +28,21 @@ services:
       - database
       - cache
     volumes:
-      - "./srv/var/:/app/var/"
+      - "${DATADIR}/pterodactyl-panel/data/:/app/var/"
     networks:
-      - default
       - proxy
+      - pterodactyl
     labels:
       - "traefik.enable=true"
-      - "traefik.frontend.rule=Host:panel.occultus.network"
-      - "traefik.frontend.passHostHeader=true"
-      - "traefik.port=80"
+      - "traefik.http.routers.pterodactyl.entrypoints=http"
+      - "traefik.http.routers.pterodactyl.rule=Host(`pterodactyl.${DOMAIN_NAME}`)"
+      - "traefik.http.middlewares.pterodactyl-https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.routers.pterodactyl.middlewares=pterodactyl-https-redirect"
+      - "traefik.http.routers.pterodactyl-secure.entrypoints=https"
+      - "traefik.http.routers.pterodactyl-secure.rule=Host(`pterodactyl.${DOMAIN_NAME}`)"
+      - "traefik.http.routers.pterodactyl-secure.tls=true"
+      - "traefik.http.routers.pterodactyl-secure.service=pterodactyl"
+      - "traefik.http.services.pterodactyl.loadbalancer.server.port=9000"
       - "traefik.docker.network=proxy"
     environment:
       ## These are defaults and should be left alone
@@ -76,10 +86,7 @@ services:
       - "MAIL_ENCRYPTION=true"
 
 networks:
-  default:
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
+  pterodactyl:
+    external: true
   proxy:
-    external:
-      name: proxy
+    external: true
